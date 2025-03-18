@@ -1,44 +1,74 @@
-import { View, Text, StyleSheet, Platform, Image, Pressable } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  Image,
+  Pressable,
+} from 'react-native';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAudioStore } from '../../stores/audioStore';
 import { useColorScheme } from '@/stores/themeStore';
 import { PageContainer } from '@/components/PageContainer';
-import { ChevronLeft, Heart, Share2, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Repeat as RepeatOne, Music } from 'lucide-react-native';
-import { Audio } from 'expo-av';
+import {
+  ChevronLeft,
+  Heart,
+  Share2,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Repeat,
+  Shuffle,
+  Repeat as RepeatOne,
+  Music,
+} from 'lucide-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { 
-  useAnimatedStyle, 
+import Animated, {
+  useAnimatedStyle,
   useSharedValue,
   withTiming,
   withRepeat,
   withSpring,
   Easing,
-  runOnJS
+  runOnJS,
 } from 'react-native-reanimated';
 
-const ALBUM_ART = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=60';
+const ALBUM_ART =
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=60';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
 export default function PlayerScreen() {
-  const { currentTrack, playlist = [], toggleFavorite, isFavorite, playNext, playPrevious } = useAudioStore();
+  const {
+    currentTrack,
+    playlist = [],
+    toggleFavorite,
+    isFavorite,
+    playNext,
+    playPrevious,
+    playTrack,
+    togglePlayPause,
+    sound,
+    isPlaying,
+    stop,
+  } = useAudioStore();
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [isShuffleOn, setIsShuffleOn] = useState(false);
   const [shuffledPlaylist, setShuffledPlaylist] = useState<typeof playlist>([]);
   const [isSeeking, setIsSeeking] = useState(false);
-  
+
   const progress = useSharedValue(0);
   const progressBarWidth = useSharedValue(0);
   const rotation = useSharedValue(0);
 
+  // Animation du cercle pour l'artwork
   useEffect(() => {
     if (isPlaying) {
       rotation.value = withRepeat(
@@ -66,111 +96,95 @@ export default function PlayerScreen() {
     };
   });
 
+  // Gestion des gestes pour la barre de progression
   const seekGesture = Gesture.Pan()
     .onStart(() => {
       runOnJS(setIsSeeking)(true);
     })
     .onUpdate((e) => {
-      const newProgress = Math.max(0, Math.min(1, e.x / progressBarWidth.value));
+      const newProgress = Math.max(
+        0,
+        Math.min(1, e.x / progressBarWidth.value)
+      );
       progress.value = newProgress;
     })
     .onEnd((e) => {
-      const newProgress = Math.max(0, Math.min(1, e.x / progressBarWidth.value));
+      const newProgress = Math.max(
+        0,
+        Math.min(1, e.x / progressBarWidth.value)
+      );
       const newPosition = newProgress * duration;
       runOnJS(handleSeek)(newPosition);
       runOnJS(setIsSeeking)(false);
     });
 
-  const tapGesture = Gesture.Tap()
-    .onStart((e) => {
-      const newProgress = Math.max(0, Math.min(1, e.x / progressBarWidth.value));
-      const newPosition = newProgress * duration;
-      runOnJS(handleSeek)(newPosition);
-    });
+  const tapGesture = Gesture.Tap().onStart((e) => {
+    const newProgress = Math.max(0, Math.min(1, e.x / progressBarWidth.value));
+    const newPosition = newProgress * duration;
+    runOnJS(handleSeek)(newPosition);
+  });
 
   const progressGestures = Gesture.Race(seekGesture, tapGesture);
 
+  // Mise à jour de la progression
   useEffect(() => {
-    if (!isSeeking) {
-      progress.value = withTiming(position / duration || 0, { duration: 100 });
+    if (!isSeeking && duration > 0) {
+      progress.value = withTiming(position / duration, { duration: 100 });
     }
   }, [position, duration, isSeeking]);
 
+  // Charger la piste sélectionnée via params.id si nécessaire
   useEffect(() => {
     if (params.id && !currentTrack && playlist.length > 0) {
-      const track = playlist.find(t => t.id === params.id);
+      const track = playlist.find((t) => t.id === params.id);
       if (track) {
         useAudioStore.setState({ currentTrack: track });
       }
     }
   }, [params.id, playlist]);
 
+  // Lancer la lecture lorsque la page est prête
   useEffect(() => {
+    if (currentTrack && !isPlaying && sound === null) {
+      playTrack(); // Lance la lecture uniquement si la piste n’est pas déjà en cours
+    }
+
+    // Nettoyage au démontage (optionnel)
     return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
+      // stop(); // Décommentez si vous voulez arrêter la lecture en quittant
     };
+  }, [currentTrack, isPlaying, playTrack, sound]);
+
+  // Mettre à jour la position et la durée à partir de l’état du son
+  useEffect(() => {
+    if (sound) {
+      const interval = setInterval(async () => {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          setPosition(status.positionMillis || 0);
+          setDuration(status.durationMillis || 0);
+          if (status.didJustFinish) {
+            handleTrackFinish();
+          }
+        }
+      }, 1000); // Mise à jour toutes les secondes
+
+      return () => clearInterval(interval);
+    }
   }, [sound]);
-
-  useEffect(() => {
-    if (currentTrack) {
-      loadAudio();
-    }
-  }, [currentTrack]);
-
-  useEffect(() => {
-    if (isShuffleOn) {
-      const newShuffledPlaylist = [...playlist].sort(() => Math.random() - 0.5);
-      setShuffledPlaylist(newShuffledPlaylist);
-    }
-  }, [isShuffleOn, playlist]);
-
-  const loadAudio = async () => {
-    if (!currentTrack) return;
-
-    try {
-      if (sound) {
-        await sound.unloadAsync();
-      }
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: currentTrack.uri },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-
-      setSound(newSound);
-      setIsPlaying(true);
-      const status = await newSound.getStatusAsync();
-      if (status.isLoaded) {
-        setDuration(status.durationMillis || 0);
-      }
-    } catch (error) {
-      console.error('Error loading audio:', error);
-    }
-  };
-
-  const onPlaybackStatusUpdate = useCallback((status: any) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis);
-      setIsPlaying(status.isPlaying);
-
-      if (status.didJustFinish) {
-        handleTrackFinish();
-      }
-    }
-  }, [repeatMode]);
 
   const handleTrackFinish = () => {
     switch (repeatMode) {
       case 'one':
-        sound?.replayAsync();
+        playTrack(); // Rejoue la même piste
         break;
       case 'all':
-        const currentIndex = playlist.findIndex(t => t.id === currentTrack?.id);
+        const currentIndex = playlist.findIndex(
+          (t) => t.id === currentTrack?.id
+        );
         if (currentIndex === playlist.length - 1) {
-          playTrack(playlist[0]);
+          useAudioStore.setState({ currentTrack: playlist[0] });
+          playTrack();
         } else {
           playNext();
         }
@@ -178,16 +192,6 @@ export default function PlayerScreen() {
       case 'off':
         playNext();
         break;
-    }
-  };
-
-  const handlePlayPause = async () => {
-    if (!sound) return;
-
-    if (isPlaying) {
-      await sound.pauseAsync();
-    } else {
-      await sound.playAsync();
     }
   };
 
@@ -205,22 +209,28 @@ export default function PlayerScreen() {
   };
 
   const toggleRepeatMode = () => {
-    setRepeatMode(current => {
+    setRepeatMode((current) => {
       switch (current) {
-        case 'off': return 'all';
-        case 'all': return 'one';
-        case 'one': return 'off';
+        case 'off':
+          return 'all';
+        case 'all':
+          return 'one';
+        case 'one':
+          return 'off';
       }
     });
   };
 
   const toggleShuffle = () => {
-    setIsShuffleOn(!isShuffleOn);
+    setIsShuffleOn((prev) => !prev);
   };
 
-  const playTrack = (track: AudioTrack) => {
-    useAudioStore.setState({ currentTrack: track });
-  };
+  useEffect(() => {
+    if (isShuffleOn) {
+      const newShuffledPlaylist = [...playlist].sort(() => Math.random() - 0.5);
+      setShuffledPlaylist(newShuffledPlaylist);
+    }
+  }, [isShuffleOn, playlist]);
 
   if (!currentTrack) {
     return (
@@ -241,9 +251,7 @@ export default function PlayerScreen() {
           <View style={styles.emptyIconContainer}>
             <Music size={48} color="#fff" style={{ opacity: 0.5 }} />
           </View>
-          <Text style={styles.emptyTitle}>
-            No track selected
-          </Text>
+          <Text style={styles.emptyTitle}>No track selected</Text>
           <Text style={styles.emptySubtitle}>
             Select a track from your library to start playing
           </Text>
@@ -280,14 +288,18 @@ export default function PlayerScreen() {
             <Text style={styles.trackTitle} numberOfLines={2}>
               {currentTrack.filename}
             </Text>
-            <Pressable 
+            <Pressable
               style={styles.favoriteButton}
               onPress={() => currentTrack && toggleFavorite(currentTrack.id)}
             >
-              <Heart 
-                size={24} 
+              <Heart
+                size={24}
                 color="#FF2D55"
-                fill={currentTrack && isFavorite(currentTrack.id) ? "#FF2D55" : "transparent"}
+                fill={
+                  currentTrack && isFavorite(currentTrack.id)
+                    ? '#FF2D55'
+                    : 'transparent'
+                }
               />
             </Pressable>
           </View>
@@ -296,15 +308,12 @@ export default function PlayerScreen() {
 
         <Animated.View style={[styles.artworkContainer, circleStyle]}>
           <View style={styles.artworkInner}>
-            <Image
-              source={{ uri: ALBUM_ART }}
-              style={styles.artworkImage}
-            />
+            <Image source={{ uri: ALBUM_ART }} style={styles.artworkImage} />
           </View>
         </Animated.View>
 
         <View style={styles.progressContainer}>
-          <View 
+          <View
             style={styles.progressBarBackground}
             onLayout={(e) => {
               progressBarWidth.value = e.nativeEvent.layout.width;
@@ -317,70 +326,55 @@ export default function PlayerScreen() {
             </GestureDetector>
           </View>
           <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>
-              {formatTime(position)}
-            </Text>
-            <Text style={styles.timeText}>
-              {formatTime(duration)}
-            </Text>
+            <Text style={styles.timeText}>{formatTime(position)}</Text>
+            <Text style={styles.timeText}>{formatTime(duration)}</Text>
           </View>
         </View>
 
         <View style={styles.playbackControls}>
-          <Pressable 
+          <Pressable
             style={[
               styles.playbackButton,
-              isShuffleOn && styles.activePlaybackButton
+              isShuffleOn && styles.activePlaybackButton,
             ]}
             onPress={toggleShuffle}
           >
-            <Shuffle 
-              size={20} 
-              color="#fff" 
+            <Shuffle
+              size={20}
+              color="#fff"
               style={{ opacity: isShuffleOn ? 1 : 0.6 }}
             />
           </Pressable>
 
           <View style={styles.mainControls}>
-            <Pressable 
-              style={styles.controlButton}
-              onPress={playPrevious}
-            >
+            <Pressable style={styles.controlButton} onPress={playPrevious}>
               <SkipBack size={32} color="#fff" />
             </Pressable>
-            
-            <Pressable 
-              onPress={handlePlayPause} 
-              style={styles.playButton}
-            >
+            <Pressable onPress={togglePlayPause} style={styles.playButton}>
               {isPlaying ? (
                 <Pause size={32} color="#fff" />
               ) : (
                 <Play size={32} color="#fff" />
               )}
             </Pressable>
-            
-            <Pressable 
-              style={styles.controlButton}
-              onPress={playNext}
-            >
+            <Pressable style={styles.controlButton} onPress={playNext}>
               <SkipForward size={32} color="#fff" />
             </Pressable>
           </View>
 
-          <Pressable 
+          <Pressable
             style={[
               styles.playbackButton,
-              repeatMode !== 'off' && styles.activePlaybackButton
+              repeatMode !== 'off' && styles.activePlaybackButton,
             ]}
             onPress={toggleRepeatMode}
           >
             {repeatMode === 'one' ? (
               <RepeatOne size={20} color="#fff" />
             ) : (
-              <Repeat 
-                size={20} 
-                color="#fff" 
+              <Repeat
+                size={20}
+                color="#fff"
                 style={{ opacity: repeatMode !== 'off' ? 1 : 0.6 }}
               />
             )}
@@ -472,10 +466,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 10,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.44,
     shadowRadius: 10.32,
   },

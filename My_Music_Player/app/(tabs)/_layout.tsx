@@ -8,8 +8,10 @@ import {
   Heart,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/stores/themeStore';
-import { Platform, useWindowDimensions, View, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Platform, useWindowDimensions, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient'; // Ajout pour le dégradé
+import { useOrientation } from '@/hooks/useOrientation';
+import * as SplashScreen from 'expo-splash-screen';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -18,8 +20,6 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { useOrientation } from '@/hooks/useOrientation';
-import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -35,14 +35,13 @@ export default function TabLayout() {
   const [isSplashVisible, setSplashVisible] = useState(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const router = useRouter();
   const orientation = useOrientation();
   const { width } = useWindowDimensions();
 
   const isLandscape = orientation === 'landscape';
   const tabBarHeight =
-    Platform.OS === 'ios' ? (isLandscape ? 68 : 88) : isLandscape ? 58 : 68;
-  const paddingBottom = Platform.OS === 'ios' ? (isLandscape ? 8 : 28) : 8;
+    Platform.OS === 'ios' ? (isLandscape ? 68 : 88) : isLandscape ? 58 : 78; // Légère augmentation pour élégance
+  const paddingBottom = Platform.OS === 'ios' ? (isLandscape ? 8 : 28) : 10;
 
   const rotation = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -76,18 +75,18 @@ export default function TabLayout() {
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#1A1B1F', // Fond du splash screen
+          backgroundColor: '#1A1B1F',
         }}
         entering={FadeIn.duration(500)}
         exiting={FadeOut.duration(500)}
       >
         <Animated.Image
-          source={require('@/assets/images/melodix.png')} // Image avec fond transparent
+          source={require('@/assets/images/melodix.png')}
           style={[
             {
               width: 300,
               height: 300,
-              borderRadius: 150, // Garde le cercle pour le texte
+              borderRadius: 150,
             },
             animatedStyle,
           ]}
@@ -105,26 +104,43 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: isDark
-              ? 'rgba(28, 28, 30, 0.95)'
-              : 'rgba(255, 255, 255, 0.95)',
-            borderTopWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0,
             height: tabBarHeight,
             paddingBottom: paddingBottom,
-            paddingTop: 8,
+            paddingTop: 10,
+            borderTopLeftRadius: 20, // Bordures arrondies en haut
+            borderTopRightRadius: 20,
+            backgroundColor: 'transparent', // Nécessaire pour le dégradé
+            position: 'absolute', // Flottement au-dessus du contenu
+            left: 0,
+            right: 0,
+            bottom: 0,
+            elevation: 8, // Ombre Android
+            shadowColor: '#000', // Ombre iOS
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            borderTopWidth: 0, // Supprime la bordure par défaut
           },
-          tabBarActiveTintColor: '#007AFF',
-          tabBarInactiveTintColor: isDark ? '#8E8E93' : '#8E8E93',
+          tabBarBackground: () => (
+            <LinearGradient
+              colors={['#4A148C', '#311B92', '#1A237E']} // Dégradé élégant
+              style={{
+                flex: 1,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+              }}
+            />
+          ),
+          tabBarActiveTintColor: '#FFFFFF', // Couleur des icônes/labels actifs (blanc pour contraste)
+          tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)', // Inactifs avec opacité
           tabBarHideOnKeyboard: true,
           tabBarLabelStyle: {
             fontFamily: 'Inter_500Medium',
             fontSize: 11,
-            marginTop: 4,
+            marginBottom: 5,
           },
           tabBarIconStyle: {
-            marginTop: isLandscape ? 0 : 4,
+            marginTop: isLandscape ? 0 : 6,
           },
         }}
       >

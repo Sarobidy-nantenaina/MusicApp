@@ -1,12 +1,29 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, Pressable, TextInput } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Platform,
+  Pressable,
+  TextInput,
+} from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { AudioFileCard } from '../../components/AudioFileCard';
-import { useAudioStore } from '../../stores/audioStore';
+import { useAudioStore, AudioTrack } from '../../stores/audioStore';
 import { useColorScheme } from '@/stores/themeStore';
 import { router } from 'expo-router';
 import { usePlaylistStore } from '@/stores/playlistStore';
-import { Trash2, ListPlus, X, Plus, Search, SquareCheck as CheckSquare } from 'lucide-react-native';
+import {
+  Trash2,
+  ListPlus,
+  X,
+  Plus,
+  Search,
+  SquareCheck as CheckSquare,
+  Play,
+  Pause,
+} from 'lucide-react-native';
 import { SongOptionsMenu } from '@/components/SongOptionsMenu';
 import { PageContainer } from '@/components/PageContainer';
 import { TabHeader } from '@/components/TabHeader';
@@ -31,7 +48,14 @@ function getFileExtension(filename: string): string {
 
 export default function AudioScreen() {
   const [error, setError] = useState<string | null>(null);
-  const { playlist, setPlaylist, setCurrentTrack } = useAudioStore();
+  const {
+    playlist,
+    setPlaylist,
+    setCurrentTrack,
+    currentTrack,
+    isPlaying,
+    togglePlayPause,
+  } = useAudioStore();
   const { playlists, addTracksToPlaylist, createPlaylist } = usePlaylistStore();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -41,7 +65,7 @@ export default function AudioScreen() {
 
   const isSelectionMode = selectedTracks.size > 0;
 
-  const filteredPlaylist = playlist.filter(track => 
+  const filteredPlaylist = playlist.filter((track) =>
     track.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -59,7 +83,7 @@ export default function AudioScreen() {
           sortBy: ['creationTime'],
         });
 
-        const audioAssets = media.assets.map(asset => ({
+        const audioAssets = media.assets.map((asset) => ({
           id: asset.id,
           filename: asset.filename,
           duration: asset.duration * 1000,
@@ -76,15 +100,19 @@ export default function AudioScreen() {
     }
 
     getAudioFiles();
-  }, []);
+  }, [setPlaylist]);
 
   const handleTrackPress = (track: AudioTrack) => {
-    setCurrentTrack(track);
-    router.push('/player');
+    if (isSelectionMode) {
+      toggleTrackSelection(track.id);
+    } else {
+      setCurrentTrack(track); // Définit la piste sans jouer
+      router.push('/player'); // Navigue vers la page de lecture
+    }
   };
 
   const toggleTrackSelection = (trackId: string) => {
-    setSelectedTracks(prev => {
+    setSelectedTracks((prev) => {
       const newSelection = new Set(prev);
       if (newSelection.has(trackId)) {
         newSelection.delete(trackId);
@@ -103,13 +131,13 @@ export default function AudioScreen() {
     if (selectedTracks.size === filteredPlaylist.length) {
       setSelectedTracks(new Set());
     } else {
-      setSelectedTracks(new Set(filteredPlaylist.map(track => track.id)));
+      setSelectedTracks(new Set(filteredPlaylist.map((track) => track.id)));
     }
   };
 
   const handleDeleteSelected = () => {
-    selectedTracks.forEach(trackId => {
-      deleteTrack(trackId);
+    selectedTracks.forEach((trackId) => {
+      useAudioStore.getState().deleteTrack(trackId); // Utilise directement deleteTrack
     });
     setSelectedTracks(new Set());
   };
@@ -123,29 +151,40 @@ export default function AudioScreen() {
       <PageContainer>
         <View style={styles.webMessage}>
           <Text style={{ color: '#FF453A' }}>
-            Audio file listing is not available on web platforms.
-            Please use a mobile device to access this feature.
+            Audio file listing is not available on web platforms. Please use a
+            mobile device to access this feature.
           </Text>
         </View>
       </PageContainer>
     );
   }
 
-  const selectedTrackObjects = playlist.filter(track => selectedTracks.has(track.id));
+  const selectedTrackObjects = playlist.filter((track) =>
+    selectedTracks.has(track.id)
+  );
 
   return (
     <PageContainer>
-      <ScrollView 
+      <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
       >
-        <TabHeader 
-          title="Audio Files" 
-          subtitle={`${filteredPlaylist.length} ${filteredPlaylist.length === 1 ? 'file' : 'files'} found${isSelectionMode ? ` • ${selectedTracks.size} selected` : ''}`}
+        <TabHeader
+          title="Audio Files"
+          subtitle={`${filteredPlaylist.length} ${
+            filteredPlaylist.length === 1 ? 'file' : 'files'
+          } found${
+            isSelectionMode ? ` • ${selectedTracks.size} selected` : ''
+          }`}
         />
 
         <View style={styles.searchContainer}>
-          <View style={{ backgroundColor: isDark ? '#1C1C1E' : '#fff', ...styles.searchInputContainer }}>
+          <View
+            style={{
+              backgroundColor: isDark ? '#1C1C1E' : '#fff',
+              ...styles.searchInputContainer,
+            }}
+          >
             <Search size={20} color={isDark ? '#8E8E93' : '#666'} />
             <TextInput
               style={{ color: isDark ? '#fff' : '#000', ...styles.searchInput }}
@@ -160,58 +199,98 @@ export default function AudioScreen() {
               </Pressable>
             )}
           </View>
-          
+
           {error ? (
             <Text style={{ color: '#FF453A', ...styles.error }}>{error}</Text>
           ) : filteredPlaylist.length === 0 ? (
-            <Text style={{ color: isDark ? '#8E8E93' : '#666', ...styles.empty }}>
-              {searchQuery ? 'No songs found matching your search' : 'No audio files found'}
+            <Text
+              style={{ color: isDark ? '#8E8E93' : '#666', ...styles.empty }}
+            >
+              {searchQuery
+                ? 'No songs found matching your search'
+                : 'No audio files found'}
             </Text>
           ) : (
-            isSelectionMode && (
-              <View style={styles.selectionControls}>
+            <>
+              {currentTrack && (
                 <Pressable
-                  style={{ backgroundColor: isDark ? '#1C1C1E' : '#fff', ...styles.selectionButton }}
-                  onPress={toggleSelectAll}
+                  style={{
+                    backgroundColor: isDark ? '#1C1C1E' : '#fff',
+                    ...styles.playPauseButton,
+                  }}
+                  onPress={togglePlayPause}
                 >
-                  <Text style={{ color: isDark ? '#fff' : '#000', ...styles.buttonText }}>
-                    {selectedTracks.size === filteredPlaylist.length ? 'Deselect All' : 'Select All'}
+                  {isPlaying ? (
+                    <Pause size={24} color={isDark ? '#fff' : '#000'} />
+                  ) : (
+                    <Play size={24} color={isDark ? '#fff' : '#000'} />
+                  )}
+                  <Text
+                    style={{
+                      color: isDark ? '#fff' : '#000',
+                      ...styles.buttonText,
+                    }}
+                  >
+                    {isPlaying ? 'Pause' : 'Play'} - {currentTrack.filename}
                   </Text>
                 </Pressable>
+              )}
 
-                <View style={styles.actionButtons}>
+              {isSelectionMode && (
+                <View style={styles.selectionControls}>
                   <Pressable
-                    style={{ backgroundColor: '#007AFF', ...styles.actionButton }}
-                    onPress={handleShowOptions}
+                    style={{
+                      backgroundColor: isDark ? '#1C1C1E' : '#fff',
+                      ...styles.selectionButton,
+                    }}
+                    onPress={toggleSelectAll}
                   >
-                    <ListPlus size={24} color="#fff" />
+                    <Text
+                      style={{
+                        color: isDark ? '#fff' : '#000',
+                        ...styles.buttonText,
+                      }}
+                    >
+                      {selectedTracks.size === filteredPlaylist.length
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Text>
                   </Pressable>
-                  <Pressable
-                    style={{ backgroundColor: '#FF3B30', ...styles.actionButton }}
-                    onPress={handleDeleteSelected}
-                  >
-                    <Trash2 size={24} color="#fff" />
-                  </Pressable>
+
+                  <View style={styles.actionButtons}>
+                    <Pressable
+                      style={{
+                        backgroundColor: '#007AFF',
+                        ...styles.actionButton,
+                      }}
+                      onPress={handleShowOptions}
+                    >
+                      <ListPlus size={24} color="#fff" />
+                    </Pressable>
+                    <Pressable
+                      style={{
+                        backgroundColor: '#FF3B30',
+                        ...styles.actionButton,
+                      }}
+                      onPress={handleDeleteSelected}
+                    >
+                      <Trash2 size={24} color="#fff" />
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            )
+              )}
+            </>
           )}
         </View>
 
-        {filteredPlaylist.map(track => (
+        {filteredPlaylist.map((track) => (
           <View key={track.id} style={styles.cardWrapper}>
             <AudioFileCard
               filename={track.filename}
               duration={formatDuration(track.duration)}
               size={formatFileSize(track.fileSize)}
               extension={track.extension}
-              onPress={() => {
-                if (isSelectionMode) {
-                  toggleTrackSelection(track.id);
-                } else {
-                  handleTrackPress(track);
-                }
-              }}
+              onPress={() => handleTrackPress(track)}
               onLongPress={() => startSelectionMode(track.id)}
               track={track}
               isSelected={selectedTracks.has(track.id)}
@@ -281,6 +360,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  playPauseButton: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
   },
   buttonText: {
     fontSize: 16,

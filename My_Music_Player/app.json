@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Melodix",
+    "slug": "melodix",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/melodix.png",
+    "scheme": "melodix",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/melodix.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.melodix.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "remote-notification", "fetch"],
+        "NSMicrophoneUsageDescription": "This app does not require microphone access",
+        "UIRequiresPersistentWiFi": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/melodix.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.melodix.app",
+      "permissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK"
+      ],
+      "foregroundService": {
+        "notify": true,
+        "notificationConfig": {
+          "channelId": "playback",
+          "contentTitle": "Now Playing",
+          "contentText": "Music is playing",
+          "ongoing": true
+        }
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/melodix.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/melodix.png",
+          "color": "#ffffff",
+          "sounds": ["./assets/sounds/notification.wav"]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

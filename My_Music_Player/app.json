@@ -28,10 +28,15 @@
         "backgroundColor": "#000000"
       },
       "package": "com.melodix.app",
+      "compileSdkVersion": 34, 
+      "targetSdkVersion": 34, 
+      "buildToolsVersion": "34.0.0", 
+      "versionCode": 1, 
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "foregroundService": {
         "notify": true,
@@ -61,12 +66,20 @@
         {
           "icon": "./assets/images/melodix.png",
           "color": "#ffffff",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "sounds": [] 
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "795a1a6a-49a9-4224-9cf0-4e78e6a47bfc"
+      }
     }
   }
 }
